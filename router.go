@@ -59,8 +59,80 @@ func (r *router) AddRoute(method string, path string, handlefunc HandleFunc) {
 	}
 	root.handler = handlefunc
 }
-
+// findRoute:路由查找
+func (r *router)findRoute(method string,path string)(*matchInfo, bool){
+	root,ok := r.trees[method]
+	if !ok {
+		return nil,false
+	}
+	if path == "/"{
+		return &matchInfo{
+			n:root,
+		},true
+	}
+	path = strings.Trim(path,"/")
+	segs := strings.Split(path,"/")
+	var pathParams map[string]string
+	for _,seg := range segs{
+		child,paramChild,found := root.childOf(seg)
+		if !found {
+			return nil,false
+		}
+		if paramChild{//命中路径参数
+			if pathParams == nil{
+				pathParams = make(map[string]string)
+			}
+			// path是 :id形式，我们去除前面的:
+			pathParams[child.path[1:]] = seg
+		}
+		root = child
+	}
+	return &matchInfo{
+		n:root,
+		pathParams: pathParams,
+	}, true
+	//我们这种匹配考虑注册这样一个路由 /user/home，那么我们既能找到user节点也能找到home节点但是user节点上没有注册的handler
+	//return root,root.handler != nil
+}
+// childOf优先考虑静态匹配，匹配不上考虑通配符匹配
+// 第一个返回值是子节点， 第二个是标记返回子节点到底是否是路径参数 第三个标记是否命中
+func (n *node) childOf(path string) (*node,bool,bool){
+	if n.children == nil{
+		if n.paramChild != nil{
+			return n.paramChild,true,true
+		}
+		//没有子节点也要考虑通配符节点
+		return n.starChid,false,n.starChid!=nil
+	}
+	child,ok := n.children[path]
+	if !ok{
+		if n.paramChild != nil{
+			return n.paramChild,true,true
+		}
+		return n.starChid,false,n.starChid!=nil
+	}
+	return child,false,ok
+}
 func (n *node) childOrCreate(seg string) *node {
+	if seg[0] == ':'{
+		if n.starChid != nil{
+			panic("web: 不允许同时注册路径参数和通配符匹配，已有通配符匹配")
+		}
+		n.paramChild = &node{
+			path:seg,
+		}
+		return n.paramChild
+	}
+
+	if seg == "*" {
+		if n.paramChild != nil {
+			panic("web: 不允许同时注册路径参数和通配符匹配，已有路径参数匹配")
+		}
+		n.starChid = &node{
+			path:seg,
+		}
+		return n.starChid
+	}
 	if n.children == nil {
 		n.children = make(map[string]*node)
 		res := &node{
@@ -85,6 +157,17 @@ type node struct {
 	// 子path到子节点的映射
 	children map[string]*node
 
+	//通配符匹配节点
+	starChid *node
+
+	// 加一个路径参数
+	paramChild *node
+
 	// 用户注册的业务逻辑
 	handler HandleFunc
+}
+
+type matchInfo struct{
+	n *node
+	pathParams map[string]string
 }

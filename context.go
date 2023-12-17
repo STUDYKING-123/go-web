@@ -3,4 +3,5 @@ import "net/http"
 type Context struct{
 	Req *http.Request
 	Response http.ResponseWriter
+	pathParams map[string][string]
 }

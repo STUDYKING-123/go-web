@@ -1,7 +1,7 @@
 package day02
 
 import (
-	"fmt"
+	_ "fmt"
 	"net/http"
 )
 type HandleFunc func(ctx *Context)
@@ -64,5 +64,12 @@ func (h *HttpServer)ServeHTTP(w http.ResponseWriter,r *http.Request){
 	h.serve(ctx)
 }
 func (h *HttpServer)serve(ctx *Context){
-	fmt.Fprintf(ctx.Response,"hello")
+	info, ok := h.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
+	if !ok || info.n.handler == nil{
+		// 路由没有命中，返回404
+		ctx.Response.WriteHeader(404)
+		ctx.Response.Write([]byte("NOT FOUND"))
+	}
+	ctx.pathParams = info.pathParams
+	info.n.handler(ctx)
 }
