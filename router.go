@@ -41,6 +41,7 @@ func (r *router) AddRoute(method string, path string, handlefunc HandleFunc) {
 			panic("web :路由冲突[/]")
 		}
 		root.handler = handlefunc
+		root.route = "/"
 		return
 	}
 
@@ -58,10 +59,12 @@ func (r *router) AddRoute(method string, path string, handlefunc HandleFunc) {
 		panic(fmt.Sprintf("web :路由冲突[%s]",path))
 	}
 	root.handler = handlefunc
+	root.route = path
 }
 // findRoute:路由查找
 func (r *router)findRoute(method string,path string)(*matchInfo, bool){
 	root,ok := r.trees[method]
+	//fmt.Println("查找路由:方法是",method)
 	if !ok {
 		return nil,false
 	}
@@ -153,6 +156,9 @@ func (n *node) childOrCreate(seg string) *node {
 }
 
 type node struct {
+	// 用以记录完整路由 如 /user/information
+	route string
+	// 记录当前节点对应路径 比如information
 	path string
 	// 子path到子节点的映射
 	children map[string]*node

@@ -26,14 +26,23 @@ type Server interface{
 }
 type HttpServer struct{
 	*router
+	middles []Middleware
 }
-
-func NewHttpServer()*HttpServer{
-	return &HttpServer{
+type HTTPServerOption func(* HttpServer)
+func NewHttpServer(opts ...HTTPServerOption)*HttpServer{
+	res := &HttpServer{
 		router: newRouter(),
 	}
+	for _,opt := range opts{
+		opt(res)
+	}
+	return res
 }
-
+func ServerWithMiddleware (mdls ...Middleware) HTTPServerOption{
+	return func(server *HttpServer){
+		server.middles = mdls
+	}
+}
 var _ Server = &HttpServer{}
 /*func (h *HttpServer)AddRoute(method string,path string,handlefunc HandleFunc){
 	//注册对应方法+PATH到路由树
@@ -60,8 +69,13 @@ func (h *HttpServer)ServeHTTP(w http.ResponseWriter,r *http.Request){
 		Req: r,
 		Response: w,
 	}
+	// 构造访问前需要访问的函数调用链，最后一个需要调用的函数是我们的serve,从后往前构造链，从前往后执行链
+	root := h.serve
+	for i := len(h.middles)-1 ;i >=0 ;i--{
+		root = h.middles[i](root)
+	}
 	// 接下来就是查找路由并执行命中的业务逻辑
-	h.serve(ctx)
+	root(ctx)
 }
 func (h *HttpServer)serve(ctx *Context){
 	info, ok := h.findRoute(ctx.Req.Method, ctx.Req.URL.Path)
@@ -69,7 +83,9 @@ func (h *HttpServer)serve(ctx *Context){
 		// 路由没有命中，返回404
 		ctx.Response.WriteHeader(404)
 		ctx.Response.Write([]byte("NOT FOUND"))
+		return
 	}
 	ctx.pathParams = info.pathParams
+	ctx.MatchRoute = info.n.route
 	info.n.handler(ctx)
 }
